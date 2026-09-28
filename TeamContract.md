@@ -61,3 +61,4 @@ Team Member Signatures:
 Hayk Danghyan
 Dean Wu
 Hongbo Wang
+Adrian Lau
