@@ -1,0 +1,13 @@
+:root { color-scheme: light; font: 17px/1.6 system-ui, sans-serif; color: #173744; background: #f0f5f6; }
+body { margin: 0; padding: 5vh 24px; }
+main { box-sizing: border-box; max-width: 720px; margin: auto; background: white; border: 1px solid #cedbdf; padding: 40px; }
+.brand { color: #006b68; font-size: 22px; font-weight: 700; margin-top: 0; }
+h1 { font-size: clamp(28px, 5vw, 38px); line-height: 1.2; }
+p { max-width: 64ch; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 28px 0; }
+button { font: inherit; font-weight: 600; padding: 12px 18px; background: #006b68; color: white; border: 1px solid #006b68; cursor: pointer; }
+#stop { background: white; color: #173744; border-color: #9aadb4; }
+button:disabled { opacity: .5; cursor: default; }
+button:focus-visible { outline: 3px solid #173744; outline-offset: 3px; }
+#status { font-weight: 650; }
+@media (max-width: 480px) { main { padding: 24px; } }
