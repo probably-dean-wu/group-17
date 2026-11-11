@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Share location with AccessGraph</title>
+    <link rel="stylesheet" href="/location.css">
+    <script src="/location.js" defer></script>
+</head>
+<body>
+<main>
+    <p class="brand">AccessGraph</p>
+    <h1>Use your live location</h1>
+    <p>This local page shares your device location with the AccessGraph desktop app after you allow it
+        in your browser. Keep this page open while sharing.</p>
+    <p>Your location is kept in memory. Displaying a Google map or opening a Google Maps journey also sends
+        the requested coordinates to Google. Your browser or operating system may use
+        its own location services.</p>
+    <div class="actions">
+        <button id="start" type="button">Start sharing location</button>
+        <button id="stop" type="button" disabled>Stop sharing</button>
+    </div>
+    <p id="status" role="status" aria-live="polite">Choose Start sharing location, then allow location access.</p>
+    <p id="accuracy"></p>
+    <p>You can stop sharing here or in AccessGraph. If you deny permission, you can still enter a
+        destination address and open the journey in Google Maps.</p>
+</main>
+</body>
+</html>
