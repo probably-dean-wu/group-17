@@ -124,12 +124,15 @@ git push -u origin feat/<short-name>
 - `TransitNetwork.without(disruptions)` gives the network that is left. The original network is not changed.
 - The **Disruptions** tab simulates a disruption and restores it. After each change it explains why the previous route is no longer valid and shows the replacement, or reports that no alternative exists.
 - The route planner reads the network through `DisruptionAwareNetworkDataAccess`, so every search avoids disrupted connections. The tab title counts the active disruptions.
-- Disruptions are simulated and kept in memory, and the tab says so.
+- Simulated disruptions are kept in memory, and the tab says when only simulated conditions apply.
+- **Live TTC alerts:** **Load live TTC alerts** reads the TTC GTFS-Realtime subway feed. A `NO_SERVICE` alert that is in effect closes the connections inside its stretch, and the journey is recalculated. Alerts that match no supported connection are listed as not applied. Live and simulated disruptions are labelled in the list, and live ones cannot be restored by hand.
 
 **Interfaces teammates build on:**
 - **Story 4 (saved trips):** run saved trips through the `JourneyRecorder` that wraps `PlanRouteInputBoundary`, and they are planned under the current disruptions and recalculated when a disruption changes. `RerouteOutputData` carries the outcome and the current route for a before/after comparison.
-- **Live alerts:** a live source can supply the same list as `DisruptionDataAccessInterface.getActiveDisruptions()`.
+- **Another alert source:** implement `ServiceAlertDataAccessInterface`. `LiveAlertsInteractor` and the route planner stay unchanged.
+
+**For the slides (API usage):** the feed is requested with `java.net.http.HttpClient` in `TtcAlertGateway`, read in its text format, and translated to our stations with `ttc-station-stops.tsv`. Adding it did not change `PlanRouteInteractor`: the planner avoids live closures because it already reads the network through the disruption-aware gateway. That is an Open/Closed example.
 
 **Later:**
-- Live TTC alerts from the GTFS-Realtime feed, once stop ids can be mapped to our connections.
 - Elevator outages, which need entrance and transfer connections in the graph.
+- Loading alerts without blocking the window. The request has a 5 second timeout and runs on the Swing thread.
