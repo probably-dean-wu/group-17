@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ReroutePresenterTest {
     private static final DisruptedConnection CLOSURE =
-            new DisruptedConnection("Planned closure", "Line 1", "1", "Bloor-Yonge", "2", "Wellesley");
+            new DisruptedConnection("Planned closure", "Line 1", "1", "Bloor-Yonge", "2", "Wellesley", false);
 
     private final RerouteViewModel viewModel = new RerouteViewModel();
     private final ReroutePresenter presenter = new ReroutePresenter(viewModel);
@@ -42,7 +42,7 @@ class ReroutePresenterTest {
         assertEquals("", state.getError());
         assertEquals(1, state.getActiveDisruptions().size());
         RerouteState.ActiveDisruption active = state.getActiveDisruptions().get(0);
-        assertEquals("Line 1: Bloor-Yonge ↔ Wellesley", active.toString());
+        assertEquals("Line 1: Bloor-Yonge ↔ Wellesley (simulated)", active.toString());
         assertEquals("Line 1", active.getLine());
         assertEquals("1", active.getStationId());
         assertEquals("2", active.getOtherStationId());

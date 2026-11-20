@@ -48,6 +48,16 @@ class DisruptionTest {
     }
 
     @Test
+    void isSimulatedUnlessItComesFromALiveAlert() {
+        Disruption live = new Disruption(Disruption.Type.OUTAGE, Disruption.Source.LIVE, "L1", "B", "A");
+        assertFalse(CLOSURE.isLive());
+        assertEquals(Disruption.Source.SIMULATED, CLOSURE.getSource());
+        assertTrue(live.isLive());
+        assertTrue(live.sharesConnectionWith(CLOSURE), "Same line and stations, whatever the type or source.");
+        assertFalse(live.sharesConnectionWith(new Disruption(Disruption.Type.OUTAGE, "L2", "A", "B")));
+    }
+
+    @Test
     void needsTwoDifferentStations() {
         assertThrows(IllegalArgumentException.class,
                 () -> new Disruption(Disruption.Type.OUTAGE, "L1", "A", "A"));

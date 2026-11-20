@@ -1,6 +1,5 @@
 package org.accessgraph.use_case.reroute;
 
-import org.accessgraph.entity.AccessibilityProfile;
 import org.accessgraph.entity.Connection;
 import org.accessgraph.entity.Disruption;
 import org.accessgraph.entity.Route;
@@ -22,9 +21,8 @@ import java.util.Optional;
  */
 public final class RerouteInteractor implements RerouteInputBoundary {
     private final TransitNetworkDataAccessInterface networkAccess;
-    private final ProfileDataAccessInterface profileAccess;
     private final DisruptionDataAccessInterface disruptionAccess;
-    private final RouteFinder routeFinder;
+    private final JourneyRecalculator journeys;
     private final RerouteOutputBoundary presenter;
 
     /**
@@ -40,9 +38,8 @@ public final class RerouteInteractor implements RerouteInputBoundary {
                              RouteFinder routeFinder,
                              RerouteOutputBoundary presenter) {
         this.networkAccess = networkAccess;
-        this.profileAccess = profileAccess;
         this.disruptionAccess = disruptionAccess;
-        this.routeFinder = routeFinder;
+        this.journeys = new JourneyRecalculator(profileAccess, disruptionAccess, routeFinder);
         this.presenter = presenter;
     }
 
@@ -59,20 +56,20 @@ public final class RerouteInteractor implements RerouteInputBoundary {
         }
         Disruption active = findActive(inputData);
         if (active != null) {
-            DisruptedConnection connection = describe(network, active);
-            presenter.prepareFailView(connection.getLine() + " between " + connection.getStationName() + " and "
-                    + connection.getOtherStationName() + " is already disrupted.");
+            presenter.prepareFailView(where(network, active) + " is already disrupted.");
             return;
         }
 
         Disruption disruption = new Disruption(inputData.getType(), inputData.getLine(),
                 inputData.getStationId(), inputData.getOtherStationId());
-        Optional<Route> previous = findRoute(network, inputData);
+        String originId = inputData.getOriginId();
+        String destinationId = inputData.getDestinationId();
+        Optional<Route> previous = journeys.findRoute(network, originId, destinationId);
         disruptionAccess.add(disruption);
-        Optional<Route> current = findRoute(network, inputData);
+        Optional<Route> current = journeys.findRoute(network, originId, destinationId);
 
         Outcome outcome;
-        if (!hasJourney(network, inputData)) {
+        if (!journeys.hasJourney(network, originId, destinationId)) {
             outcome = Outcome.NO_JOURNEY;
         } else if (previous.isEmpty()) {
             outcome = Outcome.NO_ROUTE;
@@ -92,13 +89,20 @@ public final class RerouteInteractor implements RerouteInputBoundary {
             presenter.prepareFailView("That connection is not disrupted.");
             return;
         }
+        if (disruption.isLive()) {
+            presenter.prepareFailView(where(network, disruption) + " is closed by a live TTC alert, so it cannot "
+                    + "be restored here. Clear the live alerts to plan without them.");
+            return;
+        }
 
-        Optional<Route> previous = findRoute(network, inputData);
+        String originId = inputData.getOriginId();
+        String destinationId = inputData.getDestinationId();
+        Optional<Route> previous = journeys.findRoute(network, originId, destinationId);
         disruptionAccess.remove(disruption);
-        Optional<Route> current = findRoute(network, inputData);
+        Optional<Route> current = journeys.findRoute(network, originId, destinationId);
 
         Outcome outcome;
-        if (!hasJourney(network, inputData)) {
+        if (!journeys.hasJourney(network, originId, destinationId)) {
             outcome = Outcome.NO_JOURNEY;
         } else if (current.isEmpty()) {
             outcome = Outcome.NO_ROUTE;
@@ -142,50 +146,23 @@ public final class RerouteInteractor implements RerouteInputBoundary {
         return null;
     }
 
-    /** Whether the passenger has searched for a journey between two different supported stations. */
-    private static boolean hasJourney(TransitNetwork network, RerouteInputData inputData) {
-        String originId = inputData.getOriginId();
-        String destinationId = inputData.getDestinationId();
-        return originId != null && destinationId != null && !originId.equals(destinationId)
-                && network.hasStation(originId) && network.hasStation(destinationId);
-    }
-
-    /**
-     * Returns the journey's route under the disruptions that are active right now. It is empty when there
-     * is no journey, when the profile cannot use the origin or destination, or when no route is feasible.
-     */
-    private Optional<Route> findRoute(TransitNetwork network, RerouteInputData inputData) {
-        if (!hasJourney(network, inputData)) {
-            return Optional.empty();
-        }
-        AccessibilityProfile profile = profileAccess.getProfile();
-        if (!profile.canUse(network.getStation(inputData.getOriginId()))
-                || !profile.canUse(network.getStation(inputData.getDestinationId()))) {
-            return Optional.empty();
-        }
-        TransitNetwork available = network.without(disruptionAccess.getActiveDisruptions());
-        return routeFinder.findRoute(available, inputData.getOriginId(), inputData.getDestinationId(), profile);
-    }
-
     private RerouteOutputData toOutput(TransitNetwork network, Disruption changed, Outcome outcome,
                                        Optional<Route> route) {
-        List<DisruptedConnection> active = new ArrayList<>();
-        for (Disruption disruption : disruptionAccess.getActiveDisruptions()) {
-            active.add(describe(network, disruption));
-        }
         List<String> stationNames = new ArrayList<>();
         if (route.isPresent()) {
             for (Station station : route.get().getStations()) {
                 stationNames.add(station.getName());
             }
         }
-        return new RerouteOutputData(describe(network, changed), active, outcome, stationNames,
+        return new RerouteOutputData(DisruptedConnection.of(network, changed),
+                DisruptedConnection.listOf(network, disruptionAccess.getActiveDisruptions()), outcome, stationNames,
                 route.map(Route::getTotalMinutes).orElse(0), route.map(Route::getTransfers).orElse(0));
     }
 
-    private static DisruptedConnection describe(TransitNetwork network, Disruption disruption) {
-        return new DisruptedConnection(disruption.getType().getLabel(), disruption.getLine(),
-                disruption.getStationId(), network.getStation(disruption.getStationId()).getName(),
-                disruption.getOtherStationId(), network.getStation(disruption.getOtherStationId()).getName());
+    /** Names the connection a disruption is on, for example "Line 1 between Bloor-Yonge and Wellesley". */
+    private static String where(TransitNetwork network, Disruption disruption) {
+        DisruptedConnection connection = DisruptedConnection.of(network, disruption);
+        return connection.getLine() + " between " + connection.getStationName() + " and "
+                + connection.getOtherStationName();
     }
 }
