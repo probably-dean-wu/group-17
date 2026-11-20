@@ -40,9 +40,12 @@ To regenerate the snapshot, use Python **3.9+** (standard library only), then re
 
 ```sh
 python3 scripts/update_station_catalogue.py
+python3 scripts/update_station_stops.py
 python3 -m unittest discover -s scripts -p 'test_*.py'
 mvn clean package
 ```
+
+`update_station_stops.py` writes `ttc-station-stops.tsv`, the GTFS boarding stops of every catalogued station. TTC realtime alerts name platforms by stop id, and this table matches them to stations. It reads the GTFS archive only and accepts the same `--gtfs-zip` argument.
 
 The updater downloads the official GTFS archive (currently about 68 MB), the TTC station directory, and matching station pages. Failed downloads or an unexpectedly small catalogue abort before replacing the shipped data. Optional `--gtfs-zip`, `--directory-html`, and `--cache-dir` arguments support repeatable local inspection; cached pages retain their original check dates. Resource files are in `src/main/resources/data/`. Coordinate data is attributed to the City of Toronto / TTC under the [Open Government Licence – Toronto](https://open.toronto.ca/open-data-license/).
 
