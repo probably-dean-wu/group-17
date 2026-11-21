@@ -8,6 +8,7 @@ import org.accessgraph.data_access.DisruptionAwareNetworkDataAccess;
 import org.accessgraph.data_access.FileTransitNetworkDataAccess;
 import org.accessgraph.data_access.InMemoryDisruptionDataAccess;
 import org.accessgraph.data_access.InMemoryProfileDataAccess;
+import org.accessgraph.data_access.TtcAlertGateway;
 import org.accessgraph.entity.AccessibilityProfile;
 import org.accessgraph.data_access.OpenStreetMapGateway;
 import org.accessgraph.entity.Connection;
@@ -18,9 +19,12 @@ import org.accessgraph.interface_adapter.plan_route.PlanRouteController;
 import org.accessgraph.interface_adapter.plan_route.PlanRoutePresenter;
 import org.accessgraph.interface_adapter.plan_route.PlanRouteViewModel;
 import org.accessgraph.interface_adapter.reroute.JourneyRecorder;
+import org.accessgraph.interface_adapter.reroute.LiveAlertsController;
+import org.accessgraph.interface_adapter.reroute.LiveAlertsPresenter;
 import org.accessgraph.interface_adapter.reroute.RerouteController;
 import org.accessgraph.interface_adapter.reroute.ReroutePresenter;
 import org.accessgraph.interface_adapter.reroute.RerouteViewModel;
+import org.accessgraph.use_case.live_alerts.LiveAlertsInteractor;
 import org.accessgraph.use_case.plan_route.DijkstraRouteFinder;
 import org.accessgraph.use_case.plan_route.PlanRouteInteractor;
 import org.accessgraph.use_case.reroute.RerouteInteractor;
@@ -36,6 +40,7 @@ import java.io.IOException;
 import java.net.http.HttpClient;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -51,16 +56,16 @@ public final class AppFactory {
         HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(8)).build();
         return new AccessGraphPanel(new SignIn(new DemoAccount()), DemoAccount.USERNAME, DemoAccount.PASSWORD,
                 new MapSession(loadStations()), new OpenStreetMapGateway(http), new BrowserLocationGateway(),
-                new DesktopBrowser(), Clock.systemUTC(), createJourneyTabs());
+                new DesktopBrowser(), Clock.systemUTC(), createJourneyTabs(http));
     }
 
     /**
      * Builds the column beside the map. Each use case is wired as
      * view -> controller -> interactor -> presenter -> view model. Route planning and rerouting share one
-     * network, one profile and one set of active disruptions, so a simulated disruption changes what the
-     * planner can find.
+     * network, one profile and one set of active disruptions, so a simulated disruption or a live alert
+     * changes what the planner can find.
      */
-    private static JComponent createJourneyTabs() {
+    private static JComponent createJourneyTabs(HttpClient http) {
         try {
             FileTransitNetworkDataAccess networkAccess =
                     new FileTransitNetworkDataAccess(new BundledStationRepository().load());
@@ -85,8 +90,12 @@ public final class AppFactory {
             RerouteViewModel rerouteViewModel = new RerouteViewModel();
             RerouteInteractor reroute = new RerouteInteractor(networkAccess, profileAccess, disruptionAccess,
                     routeFinder, new ReroutePresenter(rerouteViewModel));
+            LiveAlertsInteractor liveAlerts = new LiveAlertsInteractor(networkAccess, profileAccess,
+                    new TtcAlertGateway(http), disruptionAccess, routeFinder,
+                    new LiveAlertsPresenter(rerouteViewModel, ZoneId.systemDefault()));
             DisruptionPanel disruptions = new DisruptionPanel(connectionChoices(networkAccess.getNetwork()),
-                    typeChoices(), new RerouteController(reroute, journeys), rerouteViewModel);
+                    typeChoices(), new RerouteController(reroute, journeys),
+                    new LiveAlertsController(liveAlerts, journeys, Clock.systemUTC()), rerouteViewModel);
             return new JourneyTabs(routePlanner, disruptions, rerouteViewModel);
         } catch (IOException exception) {
             System.err.println("The route planner could not load its network: " + exception.getMessage());

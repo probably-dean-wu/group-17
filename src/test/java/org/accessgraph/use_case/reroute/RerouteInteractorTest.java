@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -240,6 +241,32 @@ class RerouteInteractorTest {
         assertEquals(List.of("Station A", "Station D", "Station C"), presenter.restored.getStationNames());
         assertEquals(1, presenter.restored.getActiveDisruptions().size());
         assertEquals("L1", presenter.restored.getActiveDisruptions().get(0).getLine());
+    }
+
+    @Test
+    void liveClosureCannotBeRestoredOrSimulatedOver() {
+        disruptions.add(new Disruption(Disruption.Type.OUTAGE, Disruption.Source.LIVE, "L1", "B", "C"));
+
+        interactor.restore(new RerouteInputData("L1", "B", "C", "A", "C"));
+        assertEquals("L1 between Station B and Station C is closed by a live TTC alert, so it cannot be restored "
+                + "here. Clear the live alerts to plan without them.", presenter.error);
+        assertNull(presenter.restored);
+        assertEquals(1, disruptions.active.size());
+
+        interactor.simulate(closure("L1", "B", "C", "A", "C"));
+        assertEquals("L1 between Station B and Station C is already disrupted.", presenter.error);
+        assertEquals(1, disruptions.active.size());
+    }
+
+    @Test
+    void outputSaysWhichActiveDisruptionsAreLive() {
+        disruptions.add(new Disruption(Disruption.Type.OUTAGE, Disruption.Source.LIVE, "L3", "C", "E"));
+
+        interactor.simulate(closure("L1", "B", "C", "A", "C"));
+
+        assertTrue(presenter.disrupted.getActiveDisruptions().get(0).isLive());
+        assertFalse(presenter.disrupted.getActiveDisruptions().get(1).isLive());
+        assertFalse(presenter.disrupted.getChanged().isLive());
     }
 
     @Test

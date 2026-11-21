@@ -4,14 +4,18 @@ import org.accessgraph.data_access.DisruptionAwareNetworkDataAccess;
 import org.accessgraph.data_access.InMemoryDisruptionDataAccess;
 import org.accessgraph.entity.AccessibilityProfile;
 import org.accessgraph.entity.Connection;
+import org.accessgraph.entity.ServiceAlert;
 import org.accessgraph.entity.Station;
 import org.accessgraph.entity.TransitNetwork;
 import org.accessgraph.interface_adapter.plan_route.PlanRoutePresenter;
 import org.accessgraph.interface_adapter.plan_route.PlanRouteViewModel;
 import org.accessgraph.interface_adapter.reroute.JourneyRecorder;
+import org.accessgraph.interface_adapter.reroute.LiveAlertsController;
+import org.accessgraph.interface_adapter.reroute.LiveAlertsPresenter;
 import org.accessgraph.interface_adapter.reroute.RerouteController;
 import org.accessgraph.interface_adapter.reroute.ReroutePresenter;
 import org.accessgraph.interface_adapter.reroute.RerouteViewModel;
+import org.accessgraph.use_case.live_alerts.LiveAlertsInteractor;
 import org.accessgraph.use_case.plan_route.DijkstraRouteFinder;
 import org.accessgraph.use_case.plan_route.PlanRouteInputData;
 import org.accessgraph.use_case.plan_route.PlanRouteInteractor;
@@ -27,8 +31,12 @@ import javax.swing.JTextArea;
 import javax.swing.SwingUtilities;
 import java.awt.Component;
 import java.awt.Container;
+import java.io.IOException;
 import java.net.URI;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -37,7 +45,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Drives the panel through the real controller, interactor and presenter.
+ * Drives the panel through the real controllers, interactors and presenters. Live alerts come from a
+ * fake gateway, so no test contacts the TTC.
  *
  * <pre>
  * Test network:  A --L1-- B --L1-- C     fastest way from A to C (4 minutes)
@@ -45,8 +54,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * </pre>
  */
 class DisruptionPanelTest {
+    private static final Instant NOW = Instant.parse("2026-11-21T12:00:00Z");
     private final PlanRouteViewModel plannerViewModel = new PlanRouteViewModel();
     private final RerouteViewModel viewModel = new RerouteViewModel();
+    private final List<ServiceAlert> publishedAlerts = new ArrayList<>();
+    private IOException feedFailure;
     private JourneyRecorder journeys;
     private DisruptionPanel panel;
     private JourneyTabs tabs;
@@ -76,9 +88,16 @@ class DisruptionPanelTest {
                 new PlanRoutePresenter(plannerViewModel)));
         RerouteInteractor reroute = new RerouteInteractor(() -> network, profileAccess, disruptionAccess,
                 routeFinder, new ReroutePresenter(viewModel));
+        LiveAlertsInteractor liveAlerts = new LiveAlertsInteractor(() -> network, profileAccess, () -> {
+            if (feedFailure != null) {
+                throw feedFailure;
+            }
+            return List.copyOf(publishedAlerts);
+        }, disruptionAccess, routeFinder, new LiveAlertsPresenter(viewModel, ZoneOffset.UTC));
         panel = new DisruptionPanel(choices, List.of(new DisruptionPanel.TypeChoice("OUTAGE", "Service outage"),
                 new DisruptionPanel.TypeChoice("CLOSURE", "Planned closure")),
-                new RerouteController(reroute, journeys), viewModel);
+                new RerouteController(reroute, journeys),
+                new LiveAlertsController(liveAlerts, journeys, Clock.fixed(NOW, ZoneOffset.UTC)), viewModel);
         tabs = new JourneyTabs(new JLabel("planner"), panel, viewModel);
     }
 
@@ -106,7 +125,8 @@ class DisruptionPanelTest {
             assertTrue(result.contains("Station A → Station D → Station C"), result);
             assertEquals(Ui.INK, result().getForeground());
             assertEquals(1, activeList().getModel().getSize());
-            assertEquals("L1: Station B ↔ Station C", activeList().getModel().getElementAt(0).toString());
+            assertEquals("L1: Station B ↔ Station C (simulated)",
+                    activeList().getModel().getElementAt(0).toString());
             assertTrue(button("Restore selected").isEnabled());
             assertEquals("Disruptions (1)", tabs.getTitleAt(1));
             assertTrue(plannerViewModel.getState().getSummary().startsWith("About 10 min"),
@@ -139,6 +159,69 @@ class DisruptionPanelTest {
             assertTrue(result().getText().startsWith("Simulated service outage: L2 between Station A and Station D."));
             assertTrue(result().getText().contains("Find a route to see how this disruption affects your journey."));
         });
+    }
+
+    @Test
+    void passengerLoadsLiveAlertsSeesTheClosureAndClearsIt() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            build();
+            assertTrue(hasLabel("Simulated conditions. Not live TTC data."));
+            assertFalse(button("Clear").isEnabled());
+            journeys.execute(new PlanRouteInputData("A", "C"));
+            publishedAlerts.add(new ServiceAlert("L1", List.of("B", "C"), "Line L1: no service between B and C.",
+                    NOW.minusSeconds(60), null));
+
+            button("Load live TTC alerts").doClick();
+            assertEquals("Loading live TTC alerts…", result().getText());
+        });
+        // The request itself runs as the next event, after the loading message has been shown.
+        SwingUtilities.invokeAndWait(() -> {
+            String result = result().getText();
+            assertTrue(result.startsWith("Live TTC alerts loaded. 1 connection has no service."), result);
+            assertTrue(result.contains("Line L1: no service between B and C."), result);
+            assertTrue(result.contains("Your previous route is no longer available because it passes through a "
+                    + "stretch with no service."), result);
+            assertTrue(result.contains("Replacement route: about 10 min · 0 transfers"), result);
+            assertEquals("L1: Station B ↔ Station C (live)", activeList().getModel().getElementAt(0).toString());
+            assertTrue(hasLabel("Live TTC alerts as of 12:00."));
+            assertEquals("Disruptions (1)", tabs.getTitleAt(1));
+            assertTrue(button("Clear").isEnabled());
+            assertTrue(plannerViewModel.getState().getSummary().startsWith("About 10 min"),
+                    "The planner avoids the live closure.");
+
+            button("Restore selected").doClick();
+            assertTrue(result().getText().startsWith("L1 between Station B and Station C is closed by a live TTC "
+                    + "alert"), result().getText());
+            assertEquals(Ui.ERROR, result().getForeground());
+            assertEquals(1, activeList().getModel().getSize());
+
+            button("Clear").doClick();
+            assertTrue(result().getText().startsWith("Live TTC alerts cleared."), result().getText());
+            assertEquals(0, activeList().getModel().getSize());
+            assertTrue(hasLabel("Simulated conditions. Not live TTC data."));
+            assertFalse(button("Clear").isEnabled());
+            assertTrue(plannerViewModel.getState().getSummary().startsWith("About 4 min"));
+        });
+    }
+
+    @Test
+    void failedLoadIsReportedAndKeepsSimulatedConditions() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            build();
+            feedFailure = new IOException("The TTC alert feed timed out. Check your connection and try again.");
+            button("Load live TTC alerts").doClick();
+        });
+        SwingUtilities.invokeAndWait(() -> {
+            assertEquals("Live TTC alerts were not loaded, so the conditions are unchanged. The TTC alert feed "
+                    + "timed out. Check your connection and try again.", result().getText());
+            assertEquals(Ui.ERROR, result().getForeground());
+            assertTrue(hasLabel("Simulated conditions. Not live TTC data."));
+            assertFalse(button("Clear").isEnabled());
+        });
+    }
+
+    private boolean hasLabel(String text) {
+        return find(panel, JLabel.class).stream().anyMatch(label -> text.equals(label.getText()));
     }
 
     private JComboBox<?> combo(int index) {
