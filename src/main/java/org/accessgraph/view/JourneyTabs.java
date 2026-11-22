@@ -13,15 +13,44 @@ import javax.swing.JTabbedPane;
 public final class JourneyTabs extends JTabbedPane {
     private static final String DISRUPTIONS = "Disruptions";
 
-    public JourneyTabs(JComponent routePlanner, JComponent disruptions, RerouteViewModel viewModel) {
+
+    public JourneyTabs(
+            JComponent routePlanner,
+            JComponent disruptions,
+            RerouteViewModel viewModel) {
+
+        this(routePlanner, disruptions, null, viewModel);
+    }
+
+    /** Adds Saved trips without breaking existing callers. */
+    public JourneyTabs(
+            JComponent routePlanner,
+            JComponent disruptions,
+            JComponent savedTrips,
+            RerouteViewModel viewModel) {
+
         setFont(Ui.font(13, true));
         setBackground(Ui.PAPER);
         setOpaque(true);
+
         addTab("Plan route", routePlanner);
         addTab(DISRUPTIONS, disruptions);
+
+        if (savedTrips != null) {
+            addTab("Saved trips", savedTrips);
+        }
+
         viewModel.addPropertyChangeListener(event -> {
-            int active = viewModel.getState().getActiveDisruptions().size();
-            setTitleAt(1, active == 0 ? DISRUPTIONS : DISRUPTIONS + " (" + active + ")");
+            int active =
+                    viewModel.getState().getActiveDisruptions().size();
+
+            setTitleAt(
+                    1,
+                    active == 0
+                            ? DISRUPTIONS
+                            : DISRUPTIONS + " (" + active + ")"
+            );
         });
     }
+
 }

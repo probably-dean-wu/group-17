@@ -82,6 +82,47 @@ public final class PlanRoutePanel extends JPanel {
         steps.setCaretPosition(0);
     }
 
+
+    /** Returns the currently selected origin station ID. */
+    public String getSelectedOriginId() {
+        return selectedId(origin);
+    }
+
+    /** Returns the currently selected destination station ID. */
+    public String getSelectedDestinationId() {
+        return selectedId(destination);
+    }
+
+    /** Updates the existing selectors to display a saved trip. */
+    public boolean selectStations(String originId, String destinationId) {
+        StationChoice from = findChoice(origin, originId);
+        StationChoice to = findChoice(destination, destinationId);
+
+        if (from == null || to == null) {
+            return false;
+        }
+
+        origin.setSelectedItem(from);
+        destination.setSelectedItem(to);
+        return true;
+    }
+
+    /** Finds the station choice with the matching station ID. */
+    private static StationChoice findChoice(
+            JComboBox<StationChoice> box, String id) {
+
+        for (int i = 0; i < box.getItemCount(); i++) {
+            StationChoice choice = box.getItemAt(i);
+
+            if (choice.id.equals(id)) {
+                return choice;
+            }
+        }
+
+        return null;
+    }
+
+
     private static String selectedId(JComboBox<StationChoice> box) {
         StationChoice choice = (StationChoice) box.getSelectedItem();
         return choice == null ? null : choice.id;
