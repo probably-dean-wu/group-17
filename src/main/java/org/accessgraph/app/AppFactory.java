@@ -8,7 +8,6 @@ import org.accessgraph.data_access.DisruptionAwareNetworkDataAccess;
 import org.accessgraph.data_access.FileProfileDataAccess;
 import org.accessgraph.data_access.FileTransitNetworkDataAccess;
 import org.accessgraph.data_access.InMemoryDisruptionDataAccess;
-import org.accessgraph.data_access.InMemoryProfileDataAccess;
 import org.accessgraph.data_access.TtcAlertGateway;
 import org.accessgraph.entity.AccessibilityProfile;
 import org.accessgraph.data_access.OpenStreetMapGateway;
