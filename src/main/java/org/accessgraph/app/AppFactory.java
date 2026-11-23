@@ -5,15 +5,18 @@ import org.accessgraph.data_access.BundledStationRepository;
 import org.accessgraph.data_access.DemoAccount;
 import org.accessgraph.data_access.DesktopBrowser;
 import org.accessgraph.data_access.DisruptionAwareNetworkDataAccess;
+import org.accessgraph.data_access.FileProfileDataAccess;
 import org.accessgraph.data_access.FileTransitNetworkDataAccess;
 import org.accessgraph.data_access.InMemoryDisruptionDataAccess;
-import org.accessgraph.data_access.InMemoryProfileDataAccess;
 import org.accessgraph.entity.AccessibilityProfile;
 import org.accessgraph.data_access.OpenStreetMapGateway;
 import org.accessgraph.entity.Connection;
 import org.accessgraph.entity.Disruption;
 import org.accessgraph.entity.Station;
 import org.accessgraph.entity.TransitNetwork;
+import org.accessgraph.interface_adapter.manage_profile.ManageProfileController;
+import org.accessgraph.interface_adapter.manage_profile.ManageProfilePresenter;
+import org.accessgraph.interface_adapter.manage_profile.ManageProfileViewModel;
 import org.accessgraph.interface_adapter.plan_route.PlanRouteController;
 import org.accessgraph.interface_adapter.plan_route.PlanRoutePresenter;
 import org.accessgraph.interface_adapter.plan_route.PlanRouteViewModel;
@@ -21,6 +24,7 @@ import org.accessgraph.interface_adapter.reroute.JourneyRecorder;
 import org.accessgraph.interface_adapter.reroute.RerouteController;
 import org.accessgraph.interface_adapter.reroute.ReroutePresenter;
 import org.accessgraph.interface_adapter.reroute.RerouteViewModel;
+import org.accessgraph.use_case.manage_profile.ManageProfileInteractor;
 import org.accessgraph.use_case.plan_route.DijkstraRouteFinder;
 import org.accessgraph.use_case.plan_route.PlanRouteInteractor;
 import org.accessgraph.use_case.reroute.RerouteInteractor;
@@ -30,6 +34,7 @@ import org.accessgraph.view.AccessGraphPanel;
 import org.accessgraph.view.DisruptionPanel;
 import org.accessgraph.view.JourneyTabs;
 import org.accessgraph.view.PlanRoutePanel;
+import org.accessgraph.view.ProfilePanel;
 
 import javax.swing.JComponent;
 import java.io.IOException;
@@ -79,8 +84,7 @@ public final class AppFactory {
         try {
             FileTransitNetworkDataAccess networkAccess =
                     new FileTransitNetworkDataAccess(new BundledStationRepository().load());
-            InMemoryProfileDataAccess profileAccess =
-                    new InMemoryProfileDataAccess(new AccessibilityProfile(true, 2));
+            FileProfileDataAccess profileAccess = new FileProfileDataAccess(AccessibilityProfile.strictest());
             InMemoryDisruptionDataAccess disruptionAccess = new InMemoryDisruptionDataAccess();
             DijkstraRouteFinder routeFinder = new DijkstraRouteFinder();
 
@@ -147,12 +151,21 @@ public final class AppFactory {
             rerouteViewModel.addPropertyChangeListener(
                     event -> savedController.refreshLoadedTrip());
 
-            return new JourneyTabs(
+            JourneyTabs tabs = new JourneyTabs(
                     routePlanner,
                     disruptions,
                     savedTripsPanel,
                     rerouteViewModel);
 
+            ManageProfileViewModel profileViewModel = new ManageProfileViewModel();
+            ManageProfileController profileController = new ManageProfileController(
+                    new ManageProfileInteractor(profileAccess, new ManageProfilePresenter(profileViewModel)),
+                    journeys);
+            tabs.addProfileTab(new ProfilePanel(profileController, profileViewModel,
+                    AccessibilityProfile.MAX_TRANSFERS), profileViewModel);
+            // Restore the saved profile before the first search. If there is none, the Profile tab opens.
+            profileController.load();
+            return tabs;
         } catch (IOException exception) {
             System.err.println("The route planner could not load its network: " + exception.getMessage());
             return null;

@@ -102,7 +102,7 @@ Acceptance criteria:
 
 > As a passenger with mobility restrictions, I want to save my accessibility preferences so that future searches automatically consider my needs.
 
-**Owner:** Hayk Danghyan.
+**Owner:** Hayk Danghyan. MVP implemented: open the **Profile** tab beside the map, choose whether you use a wheelchair, whether stairs and escalators are OK and how many transfers you accept, and select **Save profile**. The profile is saved to `~/.accessgraph/profile.properties` and restored at the next start. Until a profile is saved, or when the saved file cannot be read, the app explains why, opens the Profile tab and searches with the strictest profile (wheelchair, at most 2 transfers). The station data has no escalator information, so a passenger who cannot use stairs is limited to stations the TTC confirms as accessible even when escalators are OK. The tab says so.
 
 Acceptance criteria:
 

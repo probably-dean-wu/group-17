@@ -1,14 +1,15 @@
 package org.accessgraph.view;
 
+import org.accessgraph.interface_adapter.manage_profile.ManageProfileViewModel;
 import org.accessgraph.interface_adapter.reroute.RerouteViewModel;
 
 import javax.swing.JComponent;
 import javax.swing.JTabbedPane;
 
 /**
- * The column beside the map: one tab plans a route and the other simulates disruptions. The second tab's
- * title counts the active disruptions, so the passenger can tell while planning that simulated conditions
- * are in effect.
+ * The column beside the map: one tab plans a route, one simulates disruptions and one holds the passenger's
+ * accessibility profile. The second tab's title counts the active disruptions, so the passenger can tell
+ * while planning that simulated conditions are in effect.
  */
 public final class JourneyTabs extends JTabbedPane {
     private static final String DISRUPTIONS = "Disruptions";
@@ -53,4 +54,16 @@ public final class JourneyTabs extends JTabbedPane {
         });
     }
 
+    /**
+     * Adds the accessibility profile tab. It is brought to the front whenever no usable profile was saved, so
+     * the passenger can confirm one before searching.
+     */
+    public void addProfileTab(JComponent profile, ManageProfileViewModel viewModel) {
+        addTab("Profile", profile);
+        viewModel.addPropertyChangeListener(event -> {
+            if (viewModel.getState().isNeedsConfirmation()) {
+                setSelectedComponent(profile);
+            }
+        });
+    }
 }

@@ -133,3 +133,21 @@ git push -u origin feat/<short-name>
 **Later:**
 - Live TTC alerts from the GTFS-Realtime feed, once stop ids can be mapped to our connections.
 - Elevator outages, which need entrance and transfer connections in the graph.
+
+## 9. User Story 2 (accessibility profile management): status
+
+**MVP done:**
+- `AccessibilityProfile` holds four settings: wheelchair required, stairs allowed, escalators allowed, and maximum transfers (0 to 3). A wheelchair profile cannot allow stairs or escalators. The old `(stepFree, maxTransfers)` constructor still works.
+- Station usability lives in `AccessibilityProfile.canUse`. A passenger who uses a wheelchair or cannot use stairs boards, changes lines and exits only at CONFIRMED stations. A passenger who can use stairs can use any station. The station data has no escalator information, so allowing escalators does not change routes yet, and the Profile tab says so.
+- The **Profile** tab saves the profile with `FileProfileDataAccess` to `~/.accessgraph/profile.properties`. It writes a temporary file and moves it into place, so a failed save never leaves a half-written file.
+- At startup, `ManageProfileController.load()` restores the saved profile. When nothing is saved, or the file is invalid (for example `maxTransfers=abc`), the tab explains why, opens itself, and searches use `AccessibilityProfile.strictest()` until the passenger saves.
+- A new profile only takes effect once it has been saved. Saving plans the last searched journey again, so the route shown matches the profile.
+- `PlanRouteInteractor`, `DijkstraRouteFinder` and `RerouteInteractor` were not changed. They read the profile through `ProfileDataAccessInterface.getProfile()` as before (open/closed).
+
+**Interfaces teammates build on:**
+- **Story 4 (saved trips):** searches through `PlanRouteInputBoundary` already use the current profile, so loading a saved trip needs nothing extra.
+- `ManageProfileDataAccessInterface` extends `ProfileDataAccessInterface`, so the planner sees only `getProfile()` (interface segregation).
+
+**Later:**
+- Escalator and stair data per station, so "no stairs, escalators OK" can use more stations. Only `canUse` and the station data would change.
+- One profile per account, once accounts are in scope.
