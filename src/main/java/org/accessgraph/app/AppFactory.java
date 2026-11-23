@@ -48,6 +48,21 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+
+import org.accessgraph.data_access.FileSavedTripDataAccess;
+
+import org.accessgraph.interface_adapter.savedTrip.SavedTripsController;
+import org.accessgraph.interface_adapter.savedTrip.SavedTripsPresenter;
+import org.accessgraph.interface_adapter.savedTrip.SavedTripsViewModel;
+
+import org.accessgraph.use_case.savedTrip.SavedTripsInteractor;
+
+import org.accessgraph.view.SavedTripsPanel;
+
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
+
 /** The composition root connects the use cases and their desktop adapters. */
 public final class AppFactory {
     private AppFactory() { }
@@ -75,23 +90,72 @@ public final class AppFactory {
 
             PlanRouteViewModel viewModel = new PlanRouteViewModel();
             PlanRoutePresenter presenter = new PlanRoutePresenter(viewModel);
-            PlanRouteInteractor interactor = new PlanRouteInteractor(
-                    new DisruptionAwareNetworkDataAccess(networkAccess, disruptionAccess), profileAccess,
-                    routeFinder, presenter);
+
+            DisruptionAwareNetworkDataAccess currentNetwork =
+                    new DisruptionAwareNetworkDataAccess(
+                            networkAccess, disruptionAccess);
+
+            PlanRouteInteractor interactor =
+                    new PlanRouteInteractor(
+                            currentNetwork,
+                            profileAccess,
+                            routeFinder,
+                            presenter);
+
             JourneyRecorder journeys = new JourneyRecorder(interactor);
             List<PlanRoutePanel.StationChoice> choices = new ArrayList<>();
             for (Station station : networkAccess.getNetwork().getConnectedStations()) {
                 choices.add(new PlanRoutePanel.StationChoice(station.getId(), station.getName()));
             }
+
+            PlanRouteController routeController =
+                    new PlanRouteController(journeys);
+
             PlanRoutePanel routePlanner =
-                    new PlanRoutePanel(choices, new PlanRouteController(journeys), viewModel);
+                    new PlanRoutePanel(
+                            choices, routeController, viewModel);
+
 
             RerouteViewModel rerouteViewModel = new RerouteViewModel();
             RerouteInteractor reroute = new RerouteInteractor(networkAccess, profileAccess, disruptionAccess,
                     routeFinder, new ReroutePresenter(rerouteViewModel));
             DisruptionPanel disruptions = new DisruptionPanel(connectionChoices(networkAccess.getNetwork()),
                     typeChoices(), new RerouteController(reroute, journeys), rerouteViewModel);
-            JourneyTabs tabs = new JourneyTabs(routePlanner, disruptions, rerouteViewModel);
+
+            Path savedTripsFile = Paths.get(
+                    System.getProperty("user.home"),
+                    ".accessgraph",
+                    "saved-trips.properties");
+
+            SavedTripsViewModel savedViewModel =
+                    new SavedTripsViewModel();
+
+            SavedTripsInteractor savedInteractor =
+                    new SavedTripsInteractor(
+                            new FileSavedTripDataAccess(savedTripsFile),
+                            currentNetwork,
+                            profileAccess,
+                            routeFinder,
+                            new SavedTripsPresenter(savedViewModel));
+
+            SavedTripsController savedController =
+                    new SavedTripsController(savedInteractor);
+
+            SavedTripsPanel savedTripsPanel =
+                    new SavedTripsPanel(
+                            savedController,
+                            savedViewModel,
+                            routePlanner,
+                            routeController);
+
+            rerouteViewModel.addPropertyChangeListener(
+                    event -> savedController.refreshLoadedTrip());
+
+            JourneyTabs tabs = new JourneyTabs(
+                    routePlanner,
+                    disruptions,
+                    savedTripsPanel,
+                    rerouteViewModel);
 
             ManageProfileViewModel profileViewModel = new ManageProfileViewModel();
             ManageProfileController profileController = new ManageProfileController(
