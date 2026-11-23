@@ -40,9 +40,12 @@ To regenerate the snapshot, use Python **3.9+** (standard library only), then re
 
 ```sh
 python3 scripts/update_station_catalogue.py
+python3 scripts/update_station_stops.py
 python3 -m unittest discover -s scripts -p 'test_*.py'
 mvn clean package
 ```
+
+`update_station_stops.py` writes `ttc-station-stops.tsv`, the GTFS boarding stops of every catalogued station. TTC realtime alerts name platforms by stop id, and this table matches them to stations. It reads the GTFS archive only and accepts the same `--gtfs-zip` argument.
 
 The updater downloads the official GTFS archive (currently about 68 MB), the TTC station directory, and matching station pages. Failed downloads or an unexpectedly small catalogue abort before replacing the shipped data. Optional `--gtfs-zip`, `--directory-html`, and `--cache-dir` arguments support repeatable local inspection; cached pages retain their original check dates. Resource files are in `src/main/resources/data/`. Coordinate data is attributed to the City of Toronto / TTC under the [Open Government Licence – Toronto](https://open.toronto.ca/open-data-license/).
 
@@ -115,7 +118,7 @@ Acceptance criteria:
 
 > As a TTC passenger, I want my route to be recalculated when a required connection becomes inaccessible so that I can find a feasible alternative.
 
-**Owner:** Dean Wu. MVP implemented: after finding a route, open the **Disruptions** tab beside the map, choose a line, a connection and a type, and select **Simulate disruption**. **Restore selected** makes the connection available again. Disruptions are simulated and last until the application closes.
+**Owner:** Dean Wu. MVP implemented: after finding a route, open the **Disruptions** tab beside the map, choose a line, a connection and a type, and select **Simulate disruption**. **Restore selected** makes the connection available again. Simulated disruptions last until the application closes. **Load live TTC alerts** fetches the TTC's current subway alerts and closes the connections that have no service right now; **Clear** goes back to simulated conditions only. The tab says whether live alerts are part of the conditions and when they were loaded, and each active disruption is marked as live or simulated.
 
 Acceptance criteria:
 
@@ -146,11 +149,11 @@ The following sources support either the station map or planned routing integrat
 | [Toronto Open Data: TTC GTFS](https://open.toronto.ca/dataset/merged-gtfs-ttc-routes-and-schedules/) | Station-map coordinates and identifiers; later, travel connections. | Inspected feed `S1000544`; parent accessibility flags are unsuitable on their own. Routing graph still to implement. |
 | [OpenStreetMap raster tiles](https://operations.osmfoundation.org/policies/tiles/) | Keyless basemap with locally rendered station pins. | Live TTC overview verified. Local fixtures cover cache reuse, revalidation, and marker rendering. |
 | Official TTC station pages | Station-level wheelchair-accessibility evidence and source links. | Dated snapshot checked November 9, 2026; two contradictory records remain unknown. No live elevator assessment. |
-| [Toronto Open Data: TTC GTFS-Realtime](https://open.toronto.ca/dataset/ttc-gtfs-realtime-gtfs-rt) | Candidate external API for service and accessibility disruptions. | Verify endpoint access from Java, authentication, format, alert coverage, and mapping to specific connections. |
+| [Toronto Open Data: TTC GTFS-Realtime](https://open.toronto.ca/dataset/ttc-gtfs-realtime-gtfs-rt) | Live subway no-service alerts for rerouting, read from `https://gtfsrt.ttc.ca/alerts/subway?format=text`. | Validated November 20, 2026: no key is needed, the text format is read from Java, and alert stop ids map to catalogue stations through GTFS `parent_station`. Only `NO_SERVICE` alerts inside their active period close connections. Elevator and escalator alerts are not applied. |
 | [TTC elevators and escalators](https://www.ttc.ca/accessibility/Easier-access-on-the-TTC/Elevators-and-Escalators) | Reference for accessibility information and elevator locations or status. | Determine what information can be reliably incorporated and attributed. |
 | [GTFS accessibility documentation](https://gtfs.org/getting-started/features/accessibility/) | Interpret accessibility-related fields. | Check which documented fields the selected TTC data actually supplies. |
 
-The MVP must include at least one verified, working external API integration. Downloaded static files and offline HTTP fixtures alone do not complete that requirement. Launch the demo online and confirm the Toronto map renders from the live tile service. The proposed TTC realtime source still requires validation for disruption data.
+The MVP must include at least one verified, working external API integration. Downloaded static files and offline HTTP fixtures alone do not complete that requirement. Launch the demo online and confirm the Toronto map renders from the live tile service. The TTC realtime alert feed is a second live integration: select **Load live TTC alerts** in the Disruptions tab. That request is sent only when the passenger asks for it and carries no journey or location information.
 
 An elevator outage must affect only the connections supported by the data, rather than automatically disabling an entire station. Ambiguous alerts must be identified as such. Deterministic fixtures and clearly labelled simulated conditions will support testing and demonstrations when a live feed is unavailable.
 

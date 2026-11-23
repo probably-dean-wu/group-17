@@ -70,22 +70,18 @@ public final class ReroutePresenter implements RerouteOutputBoundary {
         show(data, headline, details);
     }
 
-    /** Shows the error and keeps the list of active disruptions, which a failed request does not change. */
+    /** Shows the error and keeps the active disruptions and live status, which a failed request leaves as is. */
     @Override
     public void prepareFailView(String errorMessage) {
-        viewModel.setState(new RerouteState(viewModel.getState().getActiveDisruptions(), "", List.of(),
-                errorMessage));
+        RerouteState previous = viewModel.getState();
+        viewModel.setState(new RerouteState(previous.getActiveDisruptions(), "", List.of(), errorMessage,
+                previous.getLiveStatus()));
         viewModel.firePropertyChanged();
     }
 
     private void show(RerouteOutputData data, String headline, List<String> details) {
-        List<RerouteState.ActiveDisruption> active = new ArrayList<>();
-        for (DisruptedConnection disruption : data.getActiveDisruptions()) {
-            active.add(new RerouteState.ActiveDisruption(disruption.getLine(), disruption.getStationId(),
-                    disruption.getOtherStationId(), disruption.getLine() + ": " + disruption.getStationName()
-                    + " ↔ " + disruption.getOtherStationName()));
-        }
-        viewModel.setState(new RerouteState(active, headline, details, ""));
+        viewModel.setState(new RerouteState(DisruptionText.rows(data.getActiveDisruptions()), headline, details,
+                "", viewModel.getState().getLiveStatus()));
         viewModel.firePropertyChanged();
     }
 
@@ -95,9 +91,7 @@ public final class ReroutePresenter implements RerouteOutputBoundary {
     }
 
     private static void addRoute(List<String> details, String title, RerouteOutputData data) {
-        details.add("");
-        details.add(title + ": about " + data.getTotalMinutes() + " min · " + data.getTransfers()
-                + (data.getTransfers() == 1 ? " transfer" : " transfers"));
-        details.add(String.join(" → ", data.getStationNames()));
+        DisruptionText.addRoute(details, title, data.getStationNames(), data.getTotalMinutes(),
+                data.getTransfers());
     }
 }

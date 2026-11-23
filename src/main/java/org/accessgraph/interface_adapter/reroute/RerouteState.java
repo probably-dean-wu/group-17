@@ -2,7 +2,10 @@ package org.accessgraph.interface_adapter.reroute;
 
 import java.util.List;
 
-/** What the disruption view shows: the active disruptions, and the result of the last change or an error. */
+/**
+ * What the disruption view shows: the active disruptions, the result of the last change or an error, and
+ * whether live alerts are part of the conditions.
+ */
 public final class RerouteState {
     /** An active disruption the passenger can choose to restore. */
     public static final class ActiveDisruption {
@@ -40,17 +43,19 @@ public final class RerouteState {
     private final String headline;
     private final List<String> details;
     private final String error;
+    private final String liveStatus;
 
     public RerouteState(List<ActiveDisruption> activeDisruptions, String headline, List<String> details,
-                        String error) {
+                        String error, String liveStatus) {
         this.activeDisruptions = List.copyOf(activeDisruptions);
         this.headline = headline;
         this.details = List.copyOf(details);
         this.error = error;
+        this.liveStatus = liveStatus;
     }
 
     public static RerouteState empty() {
-        return new RerouteState(List.of(), "", List.of(), "");
+        return new RerouteState(List.of(), "", List.of(), "", "");
     }
 
     public List<ActiveDisruption> getActiveDisruptions() {
@@ -69,5 +74,10 @@ public final class RerouteState {
 
     public String getError() {
         return error;
+    }
+
+    /** Says when live alerts were loaded, or is empty while only simulated conditions apply. */
+    public String getLiveStatus() {
+        return liveStatus;
     }
 }

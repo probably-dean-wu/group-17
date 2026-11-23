@@ -1,5 +1,6 @@
 package org.accessgraph.view;
 
+import org.accessgraph.interface_adapter.reroute.LiveAlertsController;
 import org.accessgraph.interface_adapter.reroute.RerouteController;
 import org.accessgraph.interface_adapter.reroute.RerouteState;
 import org.accessgraph.interface_adapter.reroute.RerouteViewModel;
@@ -17,6 +18,7 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.ListSelectionModel;
+import javax.swing.SwingUtilities;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Dimension;
@@ -26,10 +28,11 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Lets the passenger simulate a disruption on one connection, restore it afterwards, and read what the
- * change means for the journey they last searched for.
+ * Lets the passenger simulate a disruption on one connection and restore it afterwards, load or clear the
+ * TTC's live alerts, and read what each change means for the journey they last searched for.
  */
 public final class DisruptionPanel extends JPanel {
+    private static final String SIMULATED_ONLY = "Simulated conditions. Not live TTC data.";
     private final List<ConnectionChoice> connections;
     private final JComboBox<String> line = new JComboBox<>();
     private final JComboBox<ConnectionChoice> connection = new JComboBox<>();
@@ -37,6 +40,8 @@ public final class DisruptionPanel extends JPanel {
     private final DefaultListModel<RerouteState.ActiveDisruption> active = new DefaultListModel<>();
     private final JList<RerouteState.ActiveDisruption> activeList = new JList<>(active);
     private final JButton restore = Ui.button("Restore selected", false);
+    private final JButton clearLive = Ui.button("Clear", false);
+    private final JLabel conditions = Ui.label(SIMULATED_ONLY, 12, false);
     private final JTextArea result = new JTextArea();
 
     /** A connection shown in the drop-downs: the ids are sent to the controller, the label is displayed. */
@@ -80,7 +85,8 @@ public final class DisruptionPanel extends JPanel {
     }
 
     public DisruptionPanel(List<ConnectionChoice> connections, List<TypeChoice> types,
-                           RerouteController controller, RerouteViewModel viewModel) {
+                           RerouteController controller, LiveAlertsController liveAlerts,
+                           RerouteViewModel viewModel) {
         super(new BorderLayout(0, 8));
         this.connections = List.copyOf(connections);
         setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
@@ -118,14 +124,30 @@ public final class DisruptionPanel extends JPanel {
         activeList.getAccessibleContext().setAccessibleName("Active disruptions");
         activeList.addListSelectionListener(event -> restore.setEnabled(activeList.getSelectedValue() != null));
 
-        JLabel notice = Ui.label("Simulated conditions. Not live TTC data.", 12, false);
-        notice.setForeground(Ui.MUTED);
+        JButton loadLive = Ui.button("Load live TTC alerts", false);
+        loadLive.addActionListener(event -> {
+            // The request can take a few seconds, so say what is happening before it starts.
+            result.setForeground(Ui.INK);
+            result.setText("Loading live TTC alerts…");
+            SwingUtilities.invokeLater(liveAlerts::load);
+        });
+        clearLive.setEnabled(false);
+        clearLive.setToolTipText("Stop applying live TTC alerts");
+        clearLive.getAccessibleContext().setAccessibleName("Clear live TTC alerts");
+        clearLive.addActionListener(event -> liveAlerts.clear());
+        JPanel live = new JPanel(new BorderLayout(8, 0));
+        live.setOpaque(false);
+        live.add(loadLive, BorderLayout.CENTER);
+        live.add(clearLive, BorderLayout.EAST);
+        conditions.setForeground(Ui.MUTED);
 
         JPanel form = new JPanel();
         form.setOpaque(false);
         form.setLayout(new BoxLayout(form, BoxLayout.Y_AXIS));
-        form.add(left(Ui.label("Simulate a disruption", 18, true)));
-        form.add(left(notice));
+        form.add(left(Ui.label("Disruptions", 18, true)));
+        form.add(left(conditions));
+        form.add(Box.createVerticalStrut(8));
+        form.add(left(live));
         addField(form, "Line", line);
         addField(form, "Between", connection);
         addField(form, "Type", type);
@@ -140,7 +162,7 @@ public final class DisruptionPanel extends JPanel {
         result.setWrapStyleWord(true);
         result.setFont(Ui.font(13, false));
         result.getAccessibleContext().setAccessibleName("Effect on your journey");
-        result.setText("Choose a connection and simulate a disruption to see how it changes your journey.");
+        result.setText("Simulate a disruption or load the live TTC alerts to see how they change your journey.");
         add(form, BorderLayout.NORTH);
         add(new JScrollPane(result), BorderLayout.CENTER);
 
@@ -166,6 +188,8 @@ public final class DisruptionPanel extends JPanel {
             activeList.setSelectedIndex(0);
         }
         restore.setEnabled(!active.isEmpty());
+        conditions.setText(state.getLiveStatus().isEmpty() ? SIMULATED_ONLY : state.getLiveStatus());
+        clearLive.setEnabled(!state.getLiveStatus().isEmpty());
 
         boolean failed = !state.getError().isEmpty();
         List<String> lines = new ArrayList<>();
